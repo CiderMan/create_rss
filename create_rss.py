@@ -33,12 +33,36 @@ from time import strptime, strftime
 def formatDate(dt):
     return dt.strftime("%a, %d %b %Y %H:%M:%S +0000")
 
+# A quick and dirty function to produce a 'safe' version the
+# the URL for embedding in the RSS feed
 def urlquote(url, charset='UTF-8'):
     if isinstance(url, unicode):
         url = url.encode(charset, 'ignore')
     proto, rest = url.split(":", 1)
     return proto + ":" + urllib.quote(rest)
 
+# A function to produce the RSS XML skeleton
+# Returns a tuple of the whole XML and the channel element for population
+def create_rss_channel(config):
+    #record datetime started
+    now = datetime.datetime.now()
+
+    # Construct the XML
+    xml = ET.ElementTree(ET.Element("rss", {"version": "2.0"}))
+
+    # Now populate the 'rss' element */
+    chan = ET.SubElement(xml.getroot(), "channel")
+
+    ET.SubElement(chan, "title").text = config.rssTitle
+    ET.SubElement(chan, "description").text = config.rssDescription
+    ET.SubElement(chan, "link").text = config.rssLink
+    ET.SubElement(chan, "ttl").text = str(config.rssTtl)
+    ET.SubElement(chan, "lastBuildDate").text = formatDate(now)
+    ET.SubElement(chan, "pubDate").text = formatDate(now)
+
+    return xml, chan
+
+# Ignore files unless they have one of these extensions
 validExtensions = [".aac", ".m4a", ".mp4", ".mp3"]
 
 # Overrides for file extensions that do not indicate the default item type
@@ -50,66 +74,59 @@ itemTypes = {
 
 defaultItemType = "audio/mpeg"
 
-# command line options
-#    - python createRSFeed.py /path/to/podcast/files /path/to/output/rss [<Podcast title>]
-# directory passed in
-rootdir = sys.argv[1]
-# output RSS filename
-outputFilename = sys.argv[2]
+defaults = {
+    "source": (None, "String (required) - The directory containing content for this feed"),
+    "rssFile": (None, "String (required) - The RSS (i.e. XML) file to produce"),
+    "rssTitle": ("Random podcast title", "String - The RSS feed title"),
+    "rssLink": ("http://www.example.com/", "String - The website corresponding to the RSS feed"),
+    "rssDescription": ("Random podcast description", "String - The RSS feed description"),
+    "rssTtl": (60, "Integer - How long (in minutes) a feed can be cached before being refrshed"),
+}
 
-# constants
-# the podcast name
-try:
-    rssTitle = sys.argv[3]
-except:
-    rssTitle = "Default podcast title"
-# the podcast description
-rssDescription = "The podcast description"
-# the url where the podcast items will be hosted
-rssSiteURL = "http://192.168.1.251/"
+class Config(object):
+    def __init__(self, defaults):
+        self._defaults = defaults
+        self._config = {}
+
+    def __call__(self, filename):
+        for k, v in self._defaults.items():
+            self._config[k] = v[0]
+        execfile(filename, {}, self._config)
+        for k in self._config.keys():
+            assert k in self._defaults.keys(), "'%s' is not a valid configuration option" % k
+            if self._config[k] is None:
+                del self._config[k]
+
+    def __getattr__(self, attr):
+        return self._config[attr]
+
+    def __str__(self):
+        return str(self._config)
+
+config = Config(defaults)
+
+if len(sys.argv) != 2:
+    print >> sys.stderr, """Usage: %s <config file>
+
+The config file is a python script setting some or all of the following variables:
+""" % sys.argv[0]
+    for k, v in sorted(defaults.items()):
+        print >> sys.stderr, "  " + k + ":"
+        print >> sys.stderr, "    " + v[1]
+        if v[0] is not None:
+            print >> sys.stderr, "      Default:", repr(v[0])
+    sys.exit()
+else:
+    config(sys.argv[1])
+    print config
+
+xml, chan = create_rss_channel(config)
+
 # the url of the folder where the items will be stored
-rssItemURL = rssSiteURL + "recordings/"
-# the url to the podcast html file
-rssLink = rssSiteURL #+ ""
-# url to the podcast image
-rssImageUrl = rssSiteURL #+ "/logo.jpg"
-# the time to live (in minutes)
-rssTtl = "60"
-# contact details of the web master
-rssWebMaster = "me@me.com"
-
-
-#record datetime started
-now = datetime.datetime.now()
-
-
-
-# Main program
-
-# Construct the XML
-xml = ET.ElementTree(ET.Element("rss", {"version": "2.0"}))
-
-# Now populate the 'rss' element */
-
-chan = ET.SubElement(xml.getroot(), "channel")
-
-ET.SubElement(chan, "title").text = rssTitle
-ET.SubElement(chan, "description").text = rssDescription
-ET.SubElement(chan, "link").text = rssLink
-ET.SubElement(chan, "ttl").text = rssTtl
-ET.SubElement(chan, "copyright").text = "mart 2012"
-ET.SubElement(chan, "lastBuildDate").text = formatDate(now)
-ET.SubElement(chan, "pubDate").text = formatDate(now)
-ET.SubElement(chan, "webMaster").text = rssWebMaster
-
-image = ET.SubElement(chan, "image")
-imageUrl = ET.SubElement(image, "url")
-imageUrl.text = urlquote(rssImageUrl)
-ET.SubElement(image, "title").text = rssTitle
-ET.SubElement(image, "link").text = rssLink
+rssItemURL = "http://192.168.1.251/recordings/"
 
 # walk through all files and subfolders
-for path, subFolders, files in os.walk(rootdir):
+for path, subFolders, files in os.walk(config.source):
     for f in files:
         # split the file based on "." we use the first part as the title and the extension to work out the media type
         basename, ext = os.path.splitext(f)
@@ -118,7 +135,7 @@ for path, subFolders, files in os.walk(rootdir):
         # get the stats for the file
         fileStat = os.stat(fullPath)
         # find the path relative to the starting folder, e.g. /subFolder/file
-        relativePath = os.path.relpath(fullPath, os.path.dirname(outputFilename))
+        relativePath = os.path.relpath(fullPath, os.path.dirname(config.rssFile))
         print relativePath
 
         if not ext in validExtensions:
@@ -172,7 +189,7 @@ for path, subFolders, files in os.walk(rootdir):
 #end for loop
 
 # Write the XML
-xml.write(outputFilename, "UTF-8")
+xml.write(config.rssFile, "UTF-8")
 
 print "complete"
 
