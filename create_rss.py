@@ -17,17 +17,10 @@ PYTHONIOENCODING="utf-8"
 import os
 import sys
 import datetime
-import time
 import mutagen
 import urllib
 import xml.etree.ElementTree as ET
-
-# import constants from stat library
-from stat import * # ST_SIZE ST_MTIME
-
-# import ID3 tag reader
-from mutagen.id3 import ID3, ID3TimeStamp, TDRC
-from time import strptime, strftime
+import stat
 
 def print_diag(level, value, linefeed = True):
     if level < config.verbosity:
@@ -151,12 +144,10 @@ xml, chan = create_rss_channel(config)
 # walk through all files and subfolders
 for path, subFolders, files in os.walk(config.source):
     for f in files:
-        # split the file based on "." we use the first part as the title and the extension to work out the media type
-        basename, ext = os.path.splitext(f)
-        # get the full path of the file
+        # We use the extension to work out the media type
+        ext = os.path.splitext(f)[1]
+        # Get the full path of the file
         fullPath = os.path.join(path, f)
-        # get the stats for the file
-        fileStat = os.stat(fullPath)
         # find the path relative to the starting folder, e.g. /subFolder/file
         relativePath = os.path.relpath(fullPath, config.source)
         print_diag(INFOMATION, relativePath)
@@ -202,6 +193,9 @@ for path, subFolders, files in os.walk(config.source):
 
         # Add the item to the RSS XML
         url = urlquote(config.sourceUrl, relativePath)
+        # get the stats for the file
+        fileStat = os.stat(fullPath)
+
         item = ET.SubElement(chan, "item")
         ET.SubElement(item, "title").text = fileTitle
         ET.SubElement(item, "description").text = fileDesc
@@ -210,7 +204,7 @@ for path, subFolders, files in os.walk(config.source):
         ET.SubElement(item, "pubDate").text = formatDate(fileTimeStamp)
         ET.SubElement(item, "enclosure", {
             "url": url,
-            "length": str(fileStat[ST_SIZE]),
+            "length": str(fileStat[stat.ST_SIZE]),
             "type": fileTypes[ext],
             })
         
