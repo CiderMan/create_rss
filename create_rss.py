@@ -164,17 +164,23 @@ for path, subFolders, files in os.walk(config.source):
         if not ext in fileTypes.keys():
             continue
 
-        audioTags = mutagen.File(fullPath, easy=True)
+        audioTags = mutagen.File(fullPath)
         print_diag(INFOMATION, audioTags.pprint())
 
         try:
-            fileTitle = audioTags["title"][0]
+            fileTitle = audioTags["TIT2"].text[0]
         except KeyError:
+            print_diag(IMPORTANT, "Unable to determine title from metadata")
             fileTitle = "Unknown"
         print_diag(INFOMATION, fileTitle)
 
         try:
-            fileDate = audioTags["date"][0]
+            fileDate = audioTags["TDRC"].text[0]
+            try:
+                # If unicode, convert to regular string
+                fileDate = fileDate.encode('utf-8')
+            except:
+                pass
             print_diag(INFOMATION, fileDate)
             try:
                 fileTimeStamp = datetime.datetime.strptime(fileDate, "%Y-%m-%dT%H:%M:%SZ")
@@ -186,20 +192,24 @@ for path, subFolders, files in os.walk(config.source):
         print_diag(DEBUG, fileTimeStamp)
         print_diag(EXTRA_DEBUG, formatDate(fileTimeStamp))
 
-        try:
-            fileDesc = audioTags["comment"][0]
-        except KeyError:
+        for k in audioTags.keys():
+            if k.startswith("COMM"):
+                fileDesc = audioTags[k].text[0]
+                break
+        else:
+            print_diag(INFOMATION, "Unable to determine description from metadata")
             fileDesc = "No comment"
 
         # Add the item to the RSS XML
+        url = urlquote(config.sourceUrl, relativePath)
         item = ET.SubElement(chan, "item")
         ET.SubElement(item, "title").text = fileTitle
         ET.SubElement(item, "description").text = fileDesc
-        ET.SubElement(item, "link").text = urlquote(config.sourceUrl, relativePath)
-        ET.SubElement(item, "guid").text = urlquote(config.sourceUrl, relativePath)
+        ET.SubElement(item, "link").text = url
+        ET.SubElement(item, "guid").text = url
         ET.SubElement(item, "pubDate").text = formatDate(fileTimeStamp)
         ET.SubElement(item, "enclosure", {
-            "url": urlquote(config.sourceUrl, relativePath),
+            "url": url,
             "length": str(fileStat[ST_SIZE]),
             "type": fileTypes[ext],
             })
