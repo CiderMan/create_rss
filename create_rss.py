@@ -41,7 +41,17 @@ def formatDate(dt):
 
 # A quick and dirty function to produce a 'safe' version the
 # the URL for embedding in the RSS feed
-def urlquote(url, charset='UTF-8'):
+def urlquote(url, *bits, **kwds):
+    try:
+        charset = kwds["charset"]
+        del kwds["charset"]
+    except KeyError:
+        charset = "UTF-8"
+    assert len(kwds) == 0, "Unrecognised keyword parameters"
+    for bit in bits:
+        if url[-1] != '/' and bit[0] != '/':
+            url += '/'
+        url += bit
     if isinstance(url, unicode):
         url = url.encode(charset, 'ignore')
     proto, rest = url.split(":", 1)
@@ -185,11 +195,11 @@ for path, subFolders, files in os.walk(config.source):
         item = ET.SubElement(chan, "item")
         ET.SubElement(item, "title").text = fileTitle
         ET.SubElement(item, "description").text = fileDesc
-        ET.SubElement(item, "link").text = urlquote(config.sourceUrl + relativePath)
-        ET.SubElement(item, "guid").text = urlquote(config.sourceUrl + relativePath)
+        ET.SubElement(item, "link").text = urlquote(config.sourceUrl, relativePath)
+        ET.SubElement(item, "guid").text = urlquote(config.sourceUrl, relativePath)
         ET.SubElement(item, "pubDate").text = formatDate(fileTimeStamp)
         ET.SubElement(item, "enclosure", {
-            "url": urlquote(config.sourceUrl + relativePath),
+            "url": urlquote(config.sourceUrl, relativePath),
             "length": str(fileStat[ST_SIZE]),
             "type": fileTypes[ext],
             })
