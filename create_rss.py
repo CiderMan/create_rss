@@ -68,17 +68,13 @@ def create_rss_channel(config):
 
     return xml, chan
 
-# Ignore files unless they have one of these extensions
-validExtensions = [".aac", ".m4a", ".mp4", ".mp3"]
-
-# Overrides for file extensions that do not indicate the default item type
-itemTypes = {
+# Ignore files unless they have one of these extensions and include the item type for each
+fileTypes = {
         ".aac": "audio/mp4",
         ".m4a": "audio/mp4",
         ".mp4": "audio/mp4",
-        }
-
-defaultItemType = "audio/mpeg"
+        ".mp3": "audio/mpeg",
+}
 
 CRITICAL, IMPORTANT, INFOMATION, DEBUG, EXTRA_DEBUG = range(5)
 
@@ -144,7 +140,7 @@ for path, subFolders, files in os.walk(config.source):
         relativePath = os.path.relpath(fullPath, config.source)
         print_diag(INFOMATION, relativePath)
 
-        if not ext in validExtensions:
+        if not ext in fileTypes.keys():
             continue
 
         audioTags = mutagen.File(fullPath, easy=True)
@@ -184,7 +180,7 @@ for path, subFolders, files in os.walk(config.source):
         ET.SubElement(item, "enclosure", {
             "url": urlquote(config.sourceUrl + relativePath),
             "length": str(fileStat[ST_SIZE]),
-            "type": itemTypes.get(ext, defaultItemType)
+            "type": fileTypes[ext],
             })
         
     #end for loop
