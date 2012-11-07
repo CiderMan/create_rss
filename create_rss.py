@@ -84,8 +84,8 @@ CRITICAL, IMPORTANT, INFOMATION, DEBUG, EXTRA_DEBUG = range(5)
 
 defaults = {
     "source": (None, "String (required) - The directory containing content for this feed"),
+    "sourceUrl": (None, "String (required) - The URL for the 'source' directory on the internet"),
     "rssFile": (None, "String (required) - The RSS (i.e. XML) file to produce"),
-    "rssFileDirUrl": (None, "String (required) - The URL for the directory containing 'rssFile' on the web"),
     "rssTitle": ("Random podcast title", "String - The RSS feed title"),
     "rssLink": ("http://www.example.com/", "String - The website corresponding to the RSS feed"),
     "rssDescription": ("Random podcast description", "String - The RSS feed description"),
@@ -141,7 +141,7 @@ for path, subFolders, files in os.walk(config.source):
         # get the stats for the file
         fileStat = os.stat(fullPath)
         # find the path relative to the starting folder, e.g. /subFolder/file
-        relativePath = os.path.relpath(fullPath, os.path.dirname(config.rssFile))
+        relativePath = os.path.relpath(fullPath, config.source)
         print_diag(INFOMATION, relativePath)
 
         if not ext in validExtensions:
@@ -178,19 +178,15 @@ for path, subFolders, files in os.walk(config.source):
         item = ET.SubElement(chan, "item")
         ET.SubElement(item, "title").text = fileTitle
         ET.SubElement(item, "description").text = fileDesc
-        ET.SubElement(item, "link").text = urlquote(config.rssFileDirUrl + relativePath)
-        ET.SubElement(item, "guid").text = urlquote(config.rssFileDirUrl + relativePath)
+        ET.SubElement(item, "link").text = urlquote(config.sourceUrl + relativePath)
+        ET.SubElement(item, "guid").text = urlquote(config.sourceUrl + relativePath)
         ET.SubElement(item, "pubDate").text = formatDate(fileTimeStamp)
         ET.SubElement(item, "enclosure", {
-            "url": urlquote(config.rssFileDirUrl + relativePath),
+            "url": urlquote(config.sourceUrl + relativePath),
             "length": str(fileStat[ST_SIZE]),
             "type": itemTypes.get(ext, defaultItemType)
             })
         
-        candidate = os.path.join(path, basename + ".jpg")
-        if os.path.isfile(candidate):
-            print_diag(DEBUG, candidate)
-            imageUrl.text = urllib.quote(os.path.splitext(relativePath)[0] + '.jpg')
     #end for loop
 #end for loop
 
