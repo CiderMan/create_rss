@@ -29,6 +29,12 @@ from stat import * # ST_SIZE ST_MTIME
 from mutagen.id3 import ID3, ID3TimeStamp, TDRC
 from time import strptime, strftime
 
+def print_diag(level, value, linefeed = True):
+    if level < config.verbosity:
+        print str(value),
+        if linefeed:
+            print
+
 # format date method
 def formatDate(dt):
     return dt.strftime("%a, %d %b %Y %H:%M:%S +0000")
@@ -74,6 +80,8 @@ itemTypes = {
 
 defaultItemType = "audio/mpeg"
 
+CRITICAL, IMPORTANT, INFOMATION, DEBUG, EXTRA_DEBUG = range(5)
+
 defaults = {
     "source": (None, "String (required) - The directory containing content for this feed"),
     "rssFile": (None, "String (required) - The RSS (i.e. XML) file to produce"),
@@ -81,6 +89,7 @@ defaults = {
     "rssLink": ("http://www.example.com/", "String - The website corresponding to the RSS feed"),
     "rssDescription": ("Random podcast description", "String - The RSS feed description"),
     "rssTtl": (60, "Integer - How long (in minutes) a feed can be cached before being refrshed"),
+    "verbosity": (2, "Integer (0-5) - Amount of information to output. 0 results in no output"),
 }
 
 class Config(object):
@@ -118,7 +127,6 @@ The config file is a python script setting some or all of the following variable
     sys.exit()
 else:
     config(sys.argv[1])
-    print config
 
 xml, chan = create_rss_channel(config)
 
@@ -136,32 +144,32 @@ for path, subFolders, files in os.walk(config.source):
         fileStat = os.stat(fullPath)
         # find the path relative to the starting folder, e.g. /subFolder/file
         relativePath = os.path.relpath(fullPath, os.path.dirname(config.rssFile))
-        print relativePath
+        print_diag(INFOMATION, relativePath)
 
         if not ext in validExtensions:
             continue
 
         audioTags = mutagen.File(fullPath, easy=True)
-        print audioTags.pprint()
+        print_diag(INFOMATION, audioTags.pprint())
 
         try:
             fileTitle = audioTags["title"][0]
         except KeyError:
             fileTitle = "Unknown"
-        print fileTitle
+        print_diag(INFOMATION, fileTitle)
 
         try:
             fileDate = audioTags["date"][0]
-            print fileDate
+            print_diag(INFOMATION, fileDate)
             try:
                 fileTimeStamp = datetime.datetime.strptime(fileDate, "%Y-%m-%dT%H:%M:%SZ")
             except ValueError:
                 fileTimeStamp = datetime.datetime.fromtimestamp(os.path.getmtime(fullPath))
-                print "Unable to parse date from meta-data; falling back to", fileTimeStamp
+                print_diag(CRITICAL, "Unable to parse date from meta-data; falling back to %s" % fileTimeStamp)
         except KeyError:
             fileTimeStamp = datetime.datetime.now()
-        print fileTimeStamp
-        print formatDate(fileTimeStamp)
+        print_diag(DEBUG, fileTimeStamp)
+        print_diag(EXTRA_DEBUG, formatDate(fileTimeStamp))
 
         try:
             fileDesc = audioTags["comment"][0]
@@ -183,7 +191,7 @@ for path, subFolders, files in os.walk(config.source):
         
         candidate = os.path.join(path, basename + ".jpg")
         if os.path.isfile(candidate):
-            print candidate
+            print_diag(DEBUG, candidate)
             imageUrl.text = urllib.quote(os.path.splitext(relativePath)[0] + '.jpg')
     #end for loop
 #end for loop
@@ -191,5 +199,5 @@ for path, subFolders, files in os.walk(config.source):
 # Write the XML
 xml.write(config.rssFile, "UTF-8")
 
-print "complete"
+print_diag(EXTRA_DEBUG, "complete")
 
