@@ -89,6 +89,11 @@ defaults = {
     "verbosity": (2, "Integer (0-5) - Amount of information to output. 0 results in no output"),
 }
 
+class ConfigOptionException(Exception): pass
+
+class BadConfigOptionException(ConfigOptionException): pass
+class ConfigOptionNotSetException(ConfigOptionException): pass
+
 class Config(object):
     def __init__(self, defaults):
         self._defaults = defaults
@@ -104,7 +109,13 @@ class Config(object):
                 del self._config[k]
 
     def __getattr__(self, attr):
-        return self._config[attr]
+        try:
+            return self._config[attr]
+        except KeyError:
+            if attr in self._defaults.keys():
+                raise ConfigOptionNotSetException("'%s' has not be set" % attr)
+            else:
+                raise BadConfigOptionException("'%s' is not a valid configuration option" % attr)
 
     def __str__(self):
         return str(self._config)
