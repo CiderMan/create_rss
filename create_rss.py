@@ -85,6 +85,7 @@ CRITICAL, IMPORTANT, INFOMATION, DEBUG, EXTRA_DEBUG = range(5)
 defaults = {
     "source": (None, "String (required) - The directory containing content for this feed"),
     "rssFile": (None, "String (required) - The RSS (i.e. XML) file to produce"),
+    "rssFileDirUrl": (None, "String (required) - The URL for the directory containing 'rssFile' on the web"),
     "rssTitle": ("Random podcast title", "String - The RSS feed title"),
     "rssLink": ("http://www.example.com/", "String - The website corresponding to the RSS feed"),
     "rssDescription": ("Random podcast description", "String - The RSS feed description"),
@@ -129,9 +130,6 @@ else:
     config(sys.argv[1])
 
 xml, chan = create_rss_channel(config)
-
-# the url of the folder where the items will be stored
-rssItemURL = "http://192.168.1.251/recordings/"
 
 # walk through all files and subfolders
 for path, subFolders, files in os.walk(config.source):
@@ -180,11 +178,11 @@ for path, subFolders, files in os.walk(config.source):
         item = ET.SubElement(chan, "item")
         ET.SubElement(item, "title").text = fileTitle
         ET.SubElement(item, "description").text = fileDesc
-        ET.SubElement(item, "link").text = urlquote(rssItemURL + relativePath)
-        ET.SubElement(item, "guid").text = urlquote(rssItemURL + relativePath)
+        ET.SubElement(item, "link").text = urlquote(config.rssFileDirUrl + relativePath)
+        ET.SubElement(item, "guid").text = urlquote(config.rssFileDirUrl + relativePath)
         ET.SubElement(item, "pubDate").text = formatDate(fileTimeStamp)
         ET.SubElement(item, "enclosure", {
-            "url": urlquote(rssItemURL + relativePath),
+            "url": urlquote(config.rssFileDirUrl + relativePath),
             "length": str(fileStat[ST_SIZE]),
             "type": itemTypes.get(ext, defaultItemType)
             })
