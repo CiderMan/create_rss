@@ -20,6 +20,7 @@ import datetime
 import mutagen
 import urllib
 import xml.etree.ElementTree as ET
+from textwrap import TextWrapper
 
 def print_diag(level, value, linefeed = True):
     if level < config.verbosity:
@@ -87,7 +88,7 @@ defaults = {
     "rssTitle": ("Random podcast title", "String - The RSS feed title"),
     "rssLink": ("http://www.example.com/", "String - The website corresponding to the RSS feed"),
     "rssDescription": ("Random podcast description", "String - The RSS feed description"),
-    "rssTtl": (60, "Integer - How long (in minutes) a feed can be cached before being refrshed"),
+    "rssTtl": (60, "Integer - How long (in minutes) a feed can be cached before being refreshed"),
     "maxAge": (None, "Integer - The max age, indays, for items to be included in the RSS feed"),
     "deleteOld": (False, "Boolean - Whether files older than 'maxAge' should be deleted"),
     "deleteAllOld": (False, "Boolean - If 'maxAge' is set and 'deleteOld' is True, deletes all old files not just audio files"),
@@ -128,13 +129,19 @@ class Config(object):
 config = Config(defaults)
 
 if len(sys.argv) != 2:
+    textWrapper = TextWrapper(initial_indent = "    ", width = 78)
     print >> sys.stderr, """Usage: %s <config file>
 
 The config file is a python script setting some or all of the following variables:
 """ % sys.argv[0]
     for k, v in sorted(defaults.items()):
         print >> sys.stderr, "  " + k + ":"
-        print >> sys.stderr, "    " + v[1]
+        o = v[1].find("-")
+        if o < 0:
+            textWrapper.subsequent_indent = "        "
+        else:
+            textWrapper.subsequent_indent = " " * (6 + o)
+        print >> sys.stderr, "\n".join(textWrapper.wrap(v[1]))
         if v[0] is not None:
             print >> sys.stderr, "      Default:", repr(v[0])
     sys.exit()
