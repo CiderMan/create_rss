@@ -20,7 +20,6 @@ import datetime
 import mutagen
 import urllib
 import xml.etree.ElementTree as ET
-import stat
 
 def print_diag(level, value, linefeed = True):
     if level < config.verbosity:
@@ -89,6 +88,9 @@ defaults = {
     "rssLink": ("http://www.example.com/", "String - The website corresponding to the RSS feed"),
     "rssDescription": ("Random podcast description", "String - The RSS feed description"),
     "rssTtl": (60, "Integer - How long (in minutes) a feed can be cached before being refrshed"),
+    "maxAge": (None, "Integer - The max age, indays, for items to be included in the RSS feed"),
+    "deleteOld": (False, "Boolean - Whether files older than 'maxAge' should be deleted"),
+    "deleteAllOld": (False, "Boolean - If 'maxAge' is set and 'deleteOld' is True, deletes all old files not just audio files"),
     "verbosity": (2, "Integer (0-5) - Amount of information to output. 0 results in no output"),
 }
 
@@ -152,9 +154,22 @@ for path, subFolders, files in os.walk(config.source):
         relativePath = os.path.relpath(fullPath, config.source)
         print_diag(INFOMATION, relativePath)
 
+        try:
+            config.maxAge # Test for this option having been set
+            mTime = datetime.datetime.fromtimestamp(os.path.getmtime(fullPath))
+            timediff = datetime.datetime.now() - mTime
+            if timediff.days > config.maxAge:
+                print_diag(DEBUG, "%s is older than maxAge" % f)
+                if config.deleteOld and (ext in fileTypes.keys() or config.deleteAllOld):
+                    # This is an old audio file and we've been told to delete it
+                    print_diag(IMPORTANT, "%s is older than maxAge - deleting" % f)
+                    os.remove(fullPath)
+                continue
+        except ConfigOptionNotSetException:
+            pass
+
         if not ext in fileTypes.keys():
             continue
-
         audioTags = mutagen.File(fullPath)
         print_diag(INFOMATION, audioTags.pprint())
 
@@ -193,8 +208,6 @@ for path, subFolders, files in os.walk(config.source):
 
         # Add the item to the RSS XML
         url = urlquote(config.sourceUrl, relativePath)
-        # get the stats for the file
-        fileStat = os.stat(fullPath)
 
         item = ET.SubElement(chan, "item")
         ET.SubElement(item, "title").text = fileTitle
@@ -204,7 +217,7 @@ for path, subFolders, files in os.walk(config.source):
         ET.SubElement(item, "pubDate").text = formatDate(fileTimeStamp)
         ET.SubElement(item, "enclosure", {
             "url": url,
-            "length": str(fileStat[stat.ST_SIZE]),
+            "length": str(os.path.getsize(fullPath)),
             "type": fileTypes[ext],
             })
         
