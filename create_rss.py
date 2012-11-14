@@ -24,7 +24,17 @@ from textwrap import TextWrapper
 
 def print_diag(level, value, linefeed = True):
     if level < config.verbosity:
-        print str(value),
+        try:
+            # If unicode, convert to UTF-8 string
+            value = value.encode("utf-8", "replace")
+        except:
+            pass
+        try:
+            print str(value),
+        except UnicodeEncodeError:
+            # OK, failed to output a UTF-8 string so try plain ASCII
+            value = value.encode("ascii", "replace")
+            print str(value),
         if linefeed:
             print
 
@@ -78,6 +88,78 @@ fileTypes = {
         ".mp4": "audio/mp4",
         ".mp3": "audio/mpeg",
 }
+
+def MP4_process_tags(mp4tags, mTime):
+    tags = {
+        "title" : "Unknown title",
+        "date" : datetime.datetime.fromtimestamp(mTime),
+        "comment" : "No comment",
+    }
+    copyright = "\xa9"
+    
+    try:
+        tags["title"] = mp4tags[copyright + "nam"][0]
+    except KeyError:
+        print_diag(IMPORTANT, "Unable to determine title from metadata")
+
+    try:
+        fileDate = mp4tags[copyright + "day"][0]
+        try:
+            # If unicode, convert to regular string
+            fileDate = fileDate.encode('utf-8')
+        except:
+            pass
+        fileTimeStamp = datetime.datetime.strptime(fileDate, "%Y-%m-%dT%H:%M:%SZ")
+        tags["date"] = fileTimeStamp
+    except (KeyError, ValueError):
+        print_diag(IMPORTANT, "Unable to parse date from meta-data; falling back to %s" % tags["date"])
+
+    try:
+        tags["comment"] = mp4tags[copyright + "cmt"][0]
+    except KeyError:
+        print_diag(INFOMATION, "Unable to determine description from metadata")
+
+    return tags
+
+def MP3_process_tags(mp3tags, mTime):
+    tags = {
+        "title" : "Unknown title",
+        "date" : datetime.datetime.fromtimestamp(mTime),
+        "comment" : "No comment",
+    }
+
+    try:
+        tags["title"] = mp3tags["TIT2"].text[0]
+    except KeyError:
+        print_diag(IMPORTANT, "Unable to determine title from metadata")
+
+    try:
+        fileDate = mp3tags["TDRC"].text[0]
+        try:
+            # If unicode, convert to regular string
+            fileDate = fileDate.encode('utf-8')
+        except:
+            pass
+        fileTimeStamp = datetime.datetime.strptime(fileDate, "%Y-%m-%dT%H:%M:%SZ")
+        tags["date"] = fileTimeStamp
+    except (KeyError, ValueError):
+        print_diag(IMPORTANT, "Unable to parse date from meta-data; falling back to %s" % tags["date"])
+
+    for k in mp3tags.keys():
+        if k.startswith("COMM"):
+            tags["comment"] = mp3tags[k].text[0]
+            break
+    else:
+        print_diag(INFOMATION, "Unable to determine description from metadata")
+
+    return tags
+
+# The mutagen "easy mode" doesn't work with some tag formats so this, with the functions above,
+# replicates it but gives us the ability to work with the tags that we may get...
+tagTypes = {
+    "MP4": MP4_process_tags,
+    "MP3": MP3_process_tags,
+    }
 
 CRITICAL, IMPORTANT, INFOMATION, DEBUG, EXTRA_DEBUG = range(5)
 
@@ -178,50 +260,29 @@ for path, subFolders, files in os.walk(config.source):
         if not ext in fileTypes.keys():
             continue
         audioTags = mutagen.File(fullPath)
+        print_diag(INFOMATION, "Tag class: " + audioTags.__class__.__name__)
         print_diag(INFOMATION, audioTags.pprint())
 
         try:
-            fileTitle = audioTags["TIT2"].text[0]
+            tags = tagTypes[audioTags.__class__.__name__](audioTags, os.path.getmtime(fullPath))
         except KeyError:
-            print_diag(IMPORTANT, "Unable to determine title from metadata")
-            fileTitle = "Unknown"
-        print_diag(INFOMATION, fileTitle)
+            print_diag(CRITICAL, "Unable to process tag class " + audioTags.__class__.__name__)
+            continue
 
-        try:
-            fileDate = audioTags["TDRC"].text[0]
-            try:
-                # If unicode, convert to regular string
-                fileDate = fileDate.encode('utf-8')
-            except:
-                pass
-            print_diag(INFOMATION, fileDate)
-            try:
-                fileTimeStamp = datetime.datetime.strptime(fileDate, "%Y-%m-%dT%H:%M:%SZ")
-            except ValueError:
-                fileTimeStamp = datetime.datetime.fromtimestamp(os.path.getmtime(fullPath))
-                print_diag(CRITICAL, "Unable to parse date from meta-data; falling back to %s" % fileTimeStamp)
-        except KeyError:
-            fileTimeStamp = datetime.datetime.now()
-        print_diag(DEBUG, fileTimeStamp)
-        print_diag(EXTRA_DEBUG, formatDate(fileTimeStamp))
 
-        for k in audioTags.keys():
-            if k.startswith("COMM"):
-                fileDesc = audioTags[k].text[0]
-                break
-        else:
-            print_diag(INFOMATION, "Unable to determine description from metadata")
-            fileDesc = "No comment"
+        print_diag(INFOMATION, tags["title"])
+        print_diag(INFOMATION, tags["date"])
+        print_diag(INFOMATION, tags["comment"])
 
         # Add the item to the RSS XML
         url = urlquote(config.sourceUrl, relativePath)
 
         item = ET.SubElement(chan, "item")
-        ET.SubElement(item, "title").text = fileTitle
-        ET.SubElement(item, "description").text = fileDesc
+        ET.SubElement(item, "title").text = tags["title"]
+        ET.SubElement(item, "description").text = tags["comment"]
         ET.SubElement(item, "link").text = url
         ET.SubElement(item, "guid").text = url
-        ET.SubElement(item, "pubDate").text = formatDate(fileTimeStamp)
+        ET.SubElement(item, "pubDate").text = formatDate(tags["date"])
         ET.SubElement(item, "enclosure", {
             "url": url,
             "length": str(os.path.getsize(fullPath)),
