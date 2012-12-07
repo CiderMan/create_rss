@@ -92,6 +92,7 @@ fileTypes = {
 def MP4_process_tags(mp4tags, mTime):
     tags = {
         "title" : "Unknown title",
+        "album" : "Unknown album",
         "date" : datetime.datetime.fromtimestamp(mTime),
         "comment" : "No comment",
     }
@@ -101,6 +102,11 @@ def MP4_process_tags(mp4tags, mTime):
         tags["title"] = mp4tags[copyright + "nam"][0]
     except KeyError:
         print_diag(IMPORTANT, "Unable to determine title from metadata")
+
+    try:
+        tags["album"] = mp4tags[copyright + "alb"][0]
+    except KeyError:
+        print_diag(IMPORTANT, "Unable to determine album from metadata")
 
     try:
         fileDate = mp4tags[copyright + "day"][0]
@@ -124,6 +130,7 @@ def MP4_process_tags(mp4tags, mTime):
 def MP3_process_tags(mp3tags, mTime):
     tags = {
         "title" : "Unknown title",
+        "album" : "Unknown album",
         "date" : datetime.datetime.fromtimestamp(mTime),
         "comment" : "No comment",
     }
@@ -132,6 +139,11 @@ def MP3_process_tags(mp3tags, mTime):
         tags["title"] = mp3tags["TIT2"].text[0]
     except KeyError:
         print_diag(IMPORTANT, "Unable to determine title from metadata")
+
+    try:
+        tags["album"] = mp3tags["TALB"].text[0]
+    except KeyError:
+        print_diag(IMPORTANT, "Unable to determine album from metadata")
 
     try:
         fileDate = mp3tags["TDRC"].text[0]
@@ -174,6 +186,7 @@ defaults = {
     "maxAge": (None, "Integer - The max age, indays, for items to be included in the RSS feed"),
     "deleteOld": (False, "Boolean - Whether files older than 'maxAge' should be deleted"),
     "deleteAllOld": (False, "Boolean - If 'maxAge' is set and 'deleteOld' is True, deletes all old files not just audio files"),
+    "episodeTitle": ("%(title)s", "String - The string format to use for the title of each episode. Available attributes are 'title', 'album' and 'comment'"),
     "verbosity": (2, "Integer (0-5) - Amount of information to output. 0 results in no output"),
 }
 
@@ -271,6 +284,7 @@ for path, subFolders, files in os.walk(config.source):
 
 
         print_diag(INFOMATION, tags["title"])
+        print_diag(INFOMATION, tags["album"])
         print_diag(INFOMATION, tags["date"])
         print_diag(INFOMATION, tags["comment"])
 
@@ -278,7 +292,7 @@ for path, subFolders, files in os.walk(config.source):
         url = urlquote(config.sourceUrl, relativePath)
 
         item = ET.SubElement(chan, "item")
-        ET.SubElement(item, "title").text = tags["title"]
+        ET.SubElement(item, "title").text = config.episodeTitle % tags
         ET.SubElement(item, "description").text = tags["comment"]
         ET.SubElement(item, "link").text = url
         ET.SubElement(item, "guid").text = url
