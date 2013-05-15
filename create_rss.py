@@ -24,6 +24,8 @@ from textwrap import TextWrapper
 
 def print_diag(level, value, linefeed = True):
     if level < config.verbosity:
+        if level == CRITICAL:
+            print "***",
         try:
             # If unicode, convert to UTF-8 string
             value = value.encode("utf-8", "replace")
@@ -272,7 +274,11 @@ for path, subFolders, files in os.walk(config.source):
 
         if not ext in fileTypes.keys():
             continue
-        audioTags = mutagen.File(fullPath)
+        try:
+            audioTags = mutagen.File(fullPath)
+        except Exception, e:
+            print_diag(CRITICAL, "Got Mutagen exception for '%s': " % fullPath + str(e))
+            continue
         print_diag(INFOMATION, "Tag class: " + audioTags.__class__.__name__)
         print_diag(INFOMATION, audioTags.pprint())
 
