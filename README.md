@@ -2,9 +2,9 @@ create_rss
 ==========
 
 A simple application to take local audio files and create an RSS feed of podcasts for them
-
+<pre>
 $ python create_rss.py
-Usage: create_rss.py <config file>
+Usage: create_rss.py &lt;config file&gt;
 
 The config file is a python script setting some or all of the following variables:
 
@@ -43,3 +43,4 @@ The config file is a python script setting some or all of the following variable
   verbosity:
     Integer (0-5) - Amount of information to output. 0 results in no output
       Default: 2
+</pre>
