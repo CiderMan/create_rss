@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # update environment to handle Unicode
 PYTHONIOENCODING="utf-8"
 
@@ -18,27 +18,27 @@ import os
 import sys
 import datetime
 import mutagen
-import urllib
+from urllib.parse import urlsplit, quote, urlunsplit
 import xml.etree.ElementTree as ET
 from textwrap import TextWrapper
 
 def print_diag(level, value, linefeed = True):
     if level < config.verbosity:
         if level == CRITICAL:
-            print "***",
+            print("***", end="")
         try:
             # If unicode, convert to UTF-8 string
             value = value.encode("utf-8", "replace")
         except:
             pass
         try:
-            print str(value),
+            print(str(value), end="")
         except UnicodeEncodeError:
             # OK, failed to output a UTF-8 string so try plain ASCII
             value = value.encode("ascii", "replace")
-            print str(value),
+            print(str(value), end="")
         if linefeed:
-            print
+            print()
 
 # format date method
 def formatDate(dt):
@@ -47,20 +47,15 @@ def formatDate(dt):
 # A quick and dirty function to produce a 'safe' version the
 # the URL for embedding in the RSS feed
 def urlquote(url, *bits, **kwds):
-    try:
-        charset = kwds["charset"]
-        del kwds["charset"]
-    except KeyError:
-        charset = "UTF-8"
-    assert len(kwds) == 0, "Unrecognised keyword parameters"
     for bit in bits:
         if url[-1] != '/' and bit[0] != '/':
             url += '/'
         url += bit
-    if isinstance(url, unicode):
-        url = url.encode(charset, 'ignore')
-    proto, rest = url.split(":", 1)
-    return proto + ":" + urllib.quote(rest)
+    parts = urlsplit(url)
+    parts = parts._replace(path=quote(parts.path))
+    url = urlunsplit(parts)
+
+    return url
 
 # A function to produce the RSS XML skeleton
 # Returns a tuple of the whole XML and the channel element for population
@@ -89,7 +84,46 @@ fileTypes = {
         ".m4a": "audio/mp4",
         ".mp4": "audio/mp4",
         ".mp3": "audio/mpeg",
+        ".wma": "audio/x-ms-wma",
 }
+
+def WMA_process_tags(wmaTags, mTime):
+    tags = {
+        "title" : "Unknown title",
+        "album" : "Unknown album",
+        "date" : datetime.datetime.fromtimestamp(mTime),
+        "comment" : "No comment",
+    }
+    copyright = "\xa9"
+    
+    try:
+        tags["title"] = wmaTags["Title"][0]
+    except KeyError:
+        print_diag(IMPORTANT, "Unable to determine title from metadata")
+
+    try:
+        tags["album"] = wmaTags["Album"][0]
+    except KeyError:
+        print_diag(IMPORTANT, "Unable to determine album from metadata")
+
+    try:
+        fileDate = wmaTags["Date"][0]
+        try:
+            # If unicode, convert to regular string
+            fileDate = fileDate.encode('utf-8')
+        except:
+            pass
+        fileTimeStamp = datetime.datetime.strptime(fileDate, "%Y-%m-%dT%H:%M:%SZ")
+        tags["date"] = fileTimeStamp
+    except (KeyError, ValueError):
+        print_diag(IMPORTANT, "Unable to parse date from meta-data; falling back to %s" % tags["date"])
+
+    try:
+        tags["comment"] = unicode(wmaTags["Comment"][0])
+    except KeyError:
+        print_diag(INFOMATION, "Unable to determine description from metadata")
+
+    return tags
 
 def MP4_process_tags(mp4tags, mTime):
     tags = {
@@ -113,8 +147,8 @@ def MP4_process_tags(mp4tags, mTime):
     try:
         fileDate = mp4tags[copyright + "day"][0]
         try:
-            # If unicode, convert to regular string
-            fileDate = fileDate.encode('utf-8')
+            # If bytes, convert to regular string
+            fileDate = fileDate.decode('utf-8')
         except:
             pass
         fileTimeStamp = datetime.datetime.strptime(fileDate, "%Y-%m-%dT%H:%M:%SZ")
@@ -150,8 +184,8 @@ def MP3_process_tags(mp3tags, mTime):
     try:
         fileDate = mp3tags["TDRC"].text[0]
         try:
-            # If unicode, convert to regular string
-            fileDate = fileDate.encode('utf-8')
+            # If bytes, convert to regular string
+            fileDate = fileDate.decode('utf-8')
         except:
             pass
         fileTimeStamp = datetime.datetime.strptime(fileDate, "%Y-%m-%dT%H:%M:%SZ")
@@ -173,6 +207,7 @@ def MP3_process_tags(mp3tags, mTime):
 tagTypes = {
     "MP4": MP4_process_tags,
     "MP3": MP3_process_tags,
+    "ASF": WMA_process_tags,
     }
 
 CRITICAL, IMPORTANT, INFOMATION, DEBUG, EXTRA_DEBUG = range(5)
@@ -205,7 +240,9 @@ class Config(object):
     def __call__(self, filename):
         for k, v in self._defaults.items():
             self._config[k] = v[0]
-        execfile(filename, {}, self._config)
+        with open(filename) as codeFile:
+            code = compile(codeFile.read(), filename, "exec")
+            exec(code, {}, self._config)
         for k in self._config.keys():
             assert k in self._defaults.keys(), "'%s' is not a valid configuration option" % k
             if self._config[k] is None:
@@ -227,20 +264,20 @@ config = Config(defaults)
 
 if len(sys.argv) != 2:
     textWrapper = TextWrapper(initial_indent = "    ", width = 78)
-    print >> sys.stderr, """Usage: %s <config file>
+    print("""Usage: %s <config file>
 
 The config file is a python script setting some or all of the following variables:
-""" % sys.argv[0]
+""" % sys.argv[0], file=sys.stderr)
     for k, v in sorted(defaults.items()):
-        print >> sys.stderr, "  " + k + ":"
+        print("  " + k + ":", file=sys.stderr)
         o = v[1].find("-")
         if o < 0:
             textWrapper.subsequent_indent = "        "
         else:
             textWrapper.subsequent_indent = " " * (6 + o)
-        print >> sys.stderr, "\n".join(textWrapper.wrap(v[1]))
+        print("\n".join(textWrapper.wrap(v[1])), file=sys.stderr)
         if v[0] is not None:
-            print >> sys.stderr, "      Default:", repr(v[0])
+            print("      Default:", repr(v[0]), file=sys.stderr)
     sys.exit()
 else:
     config(sys.argv[1])
@@ -276,11 +313,14 @@ for path, subFolders, files in os.walk(config.source):
             continue
         try:
             audioTags = mutagen.File(fullPath)
-        except Exception, e:
+        except Exception as e:
             print_diag(CRITICAL, "Got Mutagen exception for '%s': " % fullPath + str(e))
             continue
         print_diag(INFOMATION, "Tag class: " + audioTags.__class__.__name__)
-        print_diag(INFOMATION, audioTags.pprint())
+        try:
+            print_diag(INFOMATION, audioTags.pprint())
+        except AttributeError:
+            print_diag(CRITICAL, "Unable to pprint() audio tags for '%s': " % fullPath)
 
         try:
             tags = tagTypes[audioTags.__class__.__name__](audioTags, os.path.getmtime(fullPath))
